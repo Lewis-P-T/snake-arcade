@@ -1,0 +1,8 @@
+:root { --bg: #111827; --panel: #1f2937; --fg: #e5e7eb; --snake: #22c55e; --head: #86efac; --food: #f43f5e; }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--fg); font-family: system-ui, sans-serif; }
+main { text-align: center; padding: 16px; }
+h1 { margin: 0 0 8px; letter-spacing: 2px; }
+#hud { font-size: 1.2rem; margin-bottom: 8px; }
+canvas { background: var(--panel); border-radius: 8px; max-width: 100%; height: auto; }
+#msg { opacity: .8; }
