@@ -2,13 +2,16 @@
 (function (root) {
   const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 
-  function createGame(cols = 20, rows = 20, rand = Math.random) {
+  const SPEEDS = { slow: 180, normal: 120, turbo: 70 }; // ms per tick
+
+  function createGame(cols = 20, rows = 20, rand = Math.random, opts = {}) {
     const mid = [Math.floor(cols / 2), Math.floor(rows / 2)];
     const g = {
       cols, rows, rand,
       snake: [mid, [mid[0] - 1, mid[1]], [mid[0] - 2, mid[1]]], // head first
       dir: 'right', nextDir: 'right',
       food: null, score: 0, over: false,
+      wrap: !!opts.wrap, eaten: 0, ticks: 0,
     };
     g.food = spawnFood(g);
     return g;
@@ -32,17 +35,19 @@
     if (g.over) return g;
     g.dir = g.nextDir;
     const [dx, dy] = DIRS[g.dir];
-    const head = [g.snake[0][0] + dx, g.snake[0][1] + dy];
+    let head = [g.snake[0][0] + dx, g.snake[0][1] + dy];
+    if (g.wrap) head = [(head[0] + g.cols) % g.cols, (head[1] + g.rows) % g.rows];
+    g.ticks++;
     const eats = g.food && head[0] === g.food[0] && head[1] === g.food[1];
     const body = eats ? g.snake : g.snake.slice(0, -1); // tail moves away unless growing
     const hitWall = head[0] < 0 || head[1] < 0 || head[0] >= g.cols || head[1] >= g.rows;
     const hitSelf = body.some(([x, y]) => x === head[0] && y === head[1]);
     if (hitWall || hitSelf) { g.over = true; return g; }
     g.snake = [head, ...body];
-    if (eats) { g.score += 10; g.food = spawnFood(g); if (!g.food) g.over = true; }
+    if (eats) { g.score += 10; g.eaten++; g.food = spawnFood(g); if (!g.food) g.over = true; }
     return g;
   }
 
-  const api = { DIRS, createGame, spawnFood, turn, step };
+  const api = { DIRS, SPEEDS, createGame, spawnFood, turn, step };
   if (typeof module !== 'undefined') module.exports = api; else root.SnakeGame = api;
 })(this);
