@@ -18,3 +18,9 @@ button { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid
 button[aria-pressed="true"] { background: var(--snake); color: #052e16; border-color: var(--snake); }
 button.primary { background: var(--head); color: #052e16; font-weight: bold; }
 button:focus-visible { outline: 2px solid var(--head); outline-offset: 2px; }
+#overlay .sub { margin: -6px 0 4px; opacity: .7; }
+#overlay table { border-collapse: collapse; font-size: .9rem; }
+#overlay th, #overlay td { padding: 2px 8px; text-align: left; }
+#overlay th { opacity: .7; font-weight: normal; }
+#overlay tr.new td { color: var(--power); font-weight: bold; }
+#overlay input { font: inherit; width: 9em; padding: 4px 6px; border-radius: 6px; border: 1px solid #374151; background: var(--bg); color: var(--fg); }

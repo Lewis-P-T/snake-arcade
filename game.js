@@ -139,9 +139,96 @@
     return g;
   }
 
+  // ---- High scores: top N per mode (speed + edge rule), highest first, ties keep the earlier entry above.
+  const MAX_SCORES = 10;
+  const modeKey = (speed, wrap) => `${speed}-${wrap ? 'wrap' : 'walls'}`;
+  const qualifies = (list, score) => score > 0 && (list.length < MAX_SCORES || score > list[list.length - 1].score);
+  function insertScore(list, entry) {
+    const out = list.slice();
+    let i = out.findIndex(e => entry.score > e.score);
+    if (i < 0) i = out.length;
+    out.splice(i, 0, entry);
+    return { list: out.slice(0, MAX_SCORES), rank: i < MAX_SCORES ? i : -1 };
+  }
+
+  // ---- Autopilot: BFS to food, but only if the snake could still reach its own tail afterwards
+  // (so it never seals itself in). Otherwise chase the tail, else take the move with most room.
+  function neighbor(g, [x, y], d) {
+    let nx = x + DIRS[d][0], ny = y + DIRS[d][1];
+    if (g.wrap) { nx = (nx + g.cols) % g.cols; ny = (ny + g.rows) % g.rows; }
+    else if (nx < 0 || ny < 0 || nx >= g.cols || ny >= g.rows) return null;
+    return g.walls.has(key(nx, ny)) ? null : [nx, ny];
+  }
+
+  // Shortest path from snake head to target; the tail cell counts as free (it moves away). Returns dir list or null.
+  function bfs(g, snake, target) {
+    const blocked = new Set(snake.slice(0, -1).map(c => key(...c)));
+    const start = key(...snake[0]), goal = key(...target);
+    const prev = new Map([[start, null]]), queue = [snake[0]];
+    for (let qi = 0; qi < queue.length; qi++) {
+      const cell = queue[qi], ck = key(...cell);
+      if (ck === goal && qi > 0) {
+        const path = [];
+        for (let k = ck; prev.get(k); k = prev.get(k)[0]) path.unshift(prev.get(k)[1]);
+        return path;
+      }
+      for (const d in DIRS) {
+        const n = neighbor(g, cell, d); if (!n) continue;
+        const nk = key(...n);
+        if (nk === goal && !prev.has(nk) || !prev.has(nk) && !blocked.has(nk)) { prev.set(nk, [ck, d]); queue.push(n); }
+      }
+    }
+    return null;
+  }
+
+  function floodSize(g, snake, from) {
+    const blocked = new Set(snake.map(c => key(...c)));
+    const seen = new Set([key(...from)]), queue = [from];
+    for (let qi = 0; qi < queue.length; qi++)
+      for (const d in DIRS) {
+        const n = neighbor(g, queue[qi], d); if (!n) continue;
+        const nk = key(...n);
+        if (!seen.has(nk) && !blocked.has(nk)) { seen.add(nk); queue.push(n); }
+      }
+    return seen.size;
+  }
+
+  // Move the virtual snake one cell; it grows when it lands on food.
+  function advance(snake, cell, food) {
+    const grow = food && cell[0] === food[0] && cell[1] === food[1];
+    return [cell, ...(grow ? snake : snake.slice(0, -1))];
+  }
+
+  function autopilot(g) {
+    const legal = Object.keys(DIRS).filter(d => {
+      const [dx, dy] = DIRS[d], [cx, cy] = DIRS[g.dir];
+      if (dx === -cx && dy === -cy) return false;
+      const n = neighbor(g, g.snake[0], d);
+      return n && !g.snake.slice(0, -1).some(c => c[0] === n[0] && c[1] === n[1]);
+    });
+    if (!legal.length) return g.dir;
+    if (g.food) {
+      const path = bfs(g, g.snake, g.food);
+      if (path && legal.includes(path[0])) {
+        let s = g.snake;
+        for (const d of path) s = advance(s, neighbor(g, s[0], d), g.food);
+        if (s.length < 4 || bfs(g, s, s[s.length - 1])) return path[0]; // tail reachable: safe to eat
+      }
+    }
+    // Stall safely: among moves that keep the tail reachable, prefer the one furthest from the tail.
+    let best = null, bestScore = -1;
+    for (const d of legal) {
+      const s = advance(g.snake, neighbor(g, g.snake[0], d), g.food);
+      const toTail = bfs(g, s, s[s.length - 1]);
+      const score = toTail ? 10000 + toTail.length : floodSize(g, s, s[0]);
+      if (score > bestScore) { bestScore = score; best = d; }
+    }
+    return best;
+  }
+
   // Tick delay for the UI: slow-mo halves the pace.
   const tickMs = (g, speed) => SPEEDS[speed] * (g.effects.slow ? 2 : 1);
 
-  const api = { DIRS, SPEEDS, LEVELS, POWERUPS, FOOD_PER_LEVEL, createGame, spawnFood, buildWalls, turn, step, tickMs };
+  const api = { DIRS, SPEEDS, LEVELS, POWERUPS, FOOD_PER_LEVEL, MAX_SCORES, createGame, spawnFood, buildWalls, turn, step, tickMs, modeKey, qualifies, insertScore, bfs, autopilot };
   if (typeof module !== 'undefined') module.exports = api; else root.SnakeGame = api;
 })(this);
