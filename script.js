@@ -6,7 +6,7 @@ const COLS = 20, ROWS = 20, CELL = canvas.width / COLS;
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n);
 
 // Settings persist between visits (best effort — private mode may block storage).
-let settings = { speed: 'normal', wrap: false };
+let settings = { speed: 'normal', wrap: false, sound: true };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('snake-settings')) || {}); } catch {}
 const saveSettings = () => { try { localStorage.setItem('snake-settings', JSON.stringify(settings)); } catch {} };
 
@@ -16,6 +16,21 @@ try { scores = JSON.parse(localStorage.getItem('snake-scores')) || {}; } catch {
 const saveScores = () => { try { localStorage.setItem('snake-scores', JSON.stringify(scores)); } catch {} };
 const currentMode = () => modeKey(settings.speed, settings.wrap);
 let lastRank = -1, pendingEntry = false;
+
+// Sound: tiny WebAudio blips, no files. AudioContext is created on first use (browsers need a user gesture).
+let audio = null;
+function beep(freq, ms = 70, type = 'square') {
+  if (!settings.sound || screen === 'demo') return;
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime;
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.08, t); g.gain.exponentialRampToValueAtTime(0.001, t + ms / 1000);
+    o.connect(g).connect(audio.destination); o.start(t); o.stop(t + ms / 1000);
+  } catch {}
+}
+const SOUNDS = { eat: () => beep(660), level: () => { beep(523, 90); setTimeout(() => beep(784, 140), 90); },
+  power: () => beep(990, 120, 'triangle'), die: () => beep(110, 300, 'sawtooth') };
 const esc = s => String(s).replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 
 // Screen state machine: menu -> playing <-> paused -> over -> (playing | menu); menu <-> scores; menu <-> demo
@@ -51,6 +66,7 @@ function tick() {
   if (screen === 'demo') turn(game, autopilot(game));
   step(game);
   for (const ev of game.events) {
+    SOUNDS[ev.split(':')[0]]?.();
     if (ev === 'level') { flash = 12; flashText = `Level ${game.level}!`; }
     else if (ev.startsWith('power:')) { flash = 8; flashText = POWER_LABEL[ev.slice(6)]; }
   }
@@ -70,6 +86,7 @@ function renderOverlay() {
       <div class="row">Speed: ${Object.keys(SPEEDS).map(s =>
         `<button data-speed="${s}" aria-pressed="${settings.speed === s}">${label(s)}</button>`).join('')}</div>
       <div class="row">Edges: <button data-wrap="0" aria-pressed="${!settings.wrap}">Solid walls</button><button data-wrap="1" aria-pressed="${settings.wrap}">Wrap around</button></div>
+      <div class="row">Sound: <button data-act="sound" aria-pressed="${settings.sound}">${settings.sound ? 'On' : 'Off'}</button></div>
       <button class="primary" data-act="start">Start (Enter)</button>
       <div class="row"><button data-act="scores">High scores (H)</button><button data-act="demo">Watch demo (D)</button></div>`;
   } else if (screen === 'scores') {
@@ -96,10 +113,26 @@ overlay.addEventListener('click', e => {
   if (b.dataset.speed) { settings.speed = b.dataset.speed; saveSettings(); renderOverlay(); }
   else if (b.dataset.wrap) { settings.wrap = b.dataset.wrap === '1'; saveSettings(); renderOverlay(); }
   else if (b.dataset.act) ({ start, demo: startDemo, scores: () => { lastRank = -1; setScreen('scores'); },
-    resume: () => setScreen('playing'), menu: () => setScreen('menu') })[b.dataset.act]();
+    resume: () => setScreen('playing'), menu: () => setScreen('menu'),
+    sound: () => { settings.sound = !settings.sound; saveSettings(); renderOverlay(); beep(660); } })[b.dataset.act]();
 });
 overlay.addEventListener('submit', e => { e.preventDefault(); submitScore($('nameIn').value); });
 canvas.addEventListener('click', () => { if (screen === 'demo') setScreen('menu'); });
+
+// Touch: swipe on the board to steer; tap to pause/resume. touch-action:none in CSS stops page scroll.
+let touch0 = null;
+canvas.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') touch0 = [e.clientX, e.clientY]; });
+canvas.addEventListener('pointerup', e => {
+  if (!touch0) return;
+  const dx = e.clientX - touch0[0], dy = e.clientY - touch0[1]; touch0 = null;
+  if (screen === 'demo') return setScreen('menu');
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) { // a tap, not a swipe
+    if (screen === 'playing') setScreen('paused'); else if (screen === 'paused') setScreen('playing');
+    return;
+  }
+  if (screen === 'playing') turn(game, Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+});
+canvas.addEventListener('pointercancel', () => { touch0 = null; });
 
 const KEYS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right' };
 document.addEventListener('keydown', e => {

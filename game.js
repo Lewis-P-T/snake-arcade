@@ -57,7 +57,7 @@
     const g = {
       cols, rows, rand,
       snake: startSnake(cols, rows),
-      dir: 'right', nextDir: 'right',
+      dir: 'right', turns: [],
       food: null, powerup: null, effects: {},
       score: 0, over: false, wrap: !!opts.wrap, eaten: 0, ticks: 0,
       level: 1, walls: buildWalls(1, cols, rows), events: [],
@@ -80,15 +80,17 @@
   }
 
   function turn(g, dir) {
-    const [dx, dy] = DIRS[dir], [cx, cy] = DIRS[g.dir];
-    if (dx !== -cx || dy !== -cy) g.nextDir = dir; // no 180° reversal
+    // Buffer up to 2 turns so fast taps (e.g. up+left within one tick) both land.
+    const last = g.turns.length ? g.turns[g.turns.length - 1] : g.dir;
+    const [dx, dy] = DIRS[dir], [cx, cy] = DIRS[last];
+    if (dir !== last && (dx !== -cx || dy !== -cy) && g.turns.length < 2) g.turns.push(dir); // no 180° reversal
   }
 
   function levelUp(g) {
     g.level++;
     g.walls = buildWalls(g.level, g.cols, g.rows);
     g.snake = startSnake(g.cols, g.rows); // fresh start so new walls never overlap the snake
-    g.dir = g.nextDir = 'right';
+    g.dir = 'right'; g.turns = [];
     g.powerup = null; g.food = null;
     g.score += 50;
     g.food = spawnFood(g);
@@ -98,7 +100,7 @@
   function step(g) {
     g.events = [];
     if (g.over) return g;
-    g.dir = g.nextDir;
+    if (g.turns.length) g.dir = g.turns.shift();
     const [dx, dy] = DIRS[g.dir];
     let head = [g.snake[0][0] + dx, g.snake[0][1] + dy];
     if (g.wrap) head = [(head[0] + g.cols) % g.cols, (head[1] + g.rows) % g.rows];

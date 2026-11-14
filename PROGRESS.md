@@ -7,4 +7,4 @@
 - [x] 5. Power-ups: slow-mo, score multiplier, shrink — timed effects with on-screen indicators
 - [x] 6. High-score table (top 10 per mode) saved in localStorage, name entry on game over
 - [x] 7. Demo/AI mode: autopilot snake using BFS pathfinding to food with tail-chasing fallback
-- [ ] 8. Polish: touch/swipe controls, input buffering, responsive layout, sound blips (WebAudio), README
+- [x] 8. Polish: touch/swipe controls, input buffering, responsive layout, sound blips (WebAudio), README
